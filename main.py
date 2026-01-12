@@ -15,7 +15,7 @@ import seaborn as sns
 class TomatoClassifier:
     def __init__(self):
         self.model = None
-        self.feature_method = 'HSV'  # Default HSV
+        self.feature_method = 'COMBINED'  # Default: HSV + RGB
         self.accuracy = None  # Store accuracy
         self.confusion_matrix = None  # Store confusion matrix
         
@@ -129,8 +129,15 @@ class TomatoClassifier:
         # Return 9 fitur Color Moment (3 momen × 3 channel)
         return features
     
-    def extract_features(self, image_path, color_space='HSV'):
-        """Gabungan ekstraksi fitur GLCM dan Color Moment"""
+    def extract_features(self, image_path, color_space='COMBINED'):
+        """
+        Gabungan ekstraksi fitur GLCM dan Color Moment (HSV + RGB)
+        
+        Total fitur: 22
+        - GLCM: 4 fitur (texture)
+        - HSV Color Moment: 9 fitur (3 momen × 3 channel)
+        - RGB Color Moment: 9 fitur (3 momen × 3 channel)
+        """
         image = cv2.imread(image_path)
         if image is None:
             return None
@@ -138,12 +145,17 @@ class TomatoClassifier:
         # Resize untuk konsistensi
         image = cv2.resize(image, (128, 128))
         
-        # Ekstraksi fitur
+        # Ekstraksi fitur GLCM (texture)
         glcm_features = self.extract_glcm_features(image)
-        color_features = self.extract_color_moment(image, color_space)
         
-        # Gabungkan semua fitur
-        all_features = glcm_features + color_features
+        # Ekstraksi Color Moment dari HSV
+        hsv_features = self.extract_color_moment(image, 'HSV')
+        
+        # Ekstraksi Color Moment dari RGB
+        rgb_features = self.extract_color_moment(image, 'RGB')
+        
+        # Gabungkan semua fitur: GLCM + HSV + RGB
+        all_features = glcm_features + hsv_features + rgb_features
         
         return all_features
     
@@ -403,41 +415,20 @@ class TomatoClassifierGUI:
         
         # Header metode ekstraksi
         method_header = tk.Label(left_frame, 
-                                text="Metode Ekstraksi Fitur:", 
+                                text="Metode Ekstraksi:", 
                                 font=("Segoe UI", 11, "bold"),
                                 bg='#16213e',
                                 fg='#ffffff')
         method_header.pack(anchor=tk.W, pady=(5,10))
         
-        # Radio buttons dengan styling
-        self.method_var = tk.StringVar(value="HSV")
-        
-        radio_frame = tk.Frame(left_frame, bg='#16213e')
-        radio_frame.pack(anchor=tk.W, pady=(0,15))
-        
-        rb1 = tk.Radiobutton(radio_frame, 
-                            text="HSV + GLCM", 
-                            variable=self.method_var, 
-                            value="HSV",
-                            font=("Segoe UI", 10),
-                            bg='#16213e',
-                            fg='#ffffff',
-                            selectcolor='#0f3460',
-                            activebackground='#16213e',
-                            activeforeground='#00ff88')
-        rb1.pack(anchor=tk.W, pady=3)
-        
-        rb2 = tk.Radiobutton(radio_frame, 
-                            text="RGB + GLCM", 
-                            variable=self.method_var, 
-                            value="RGB",
-                            font=("Segoe UI", 10),
-                            bg='#16213e',
-                            fg='#ffffff',
-                            selectcolor='#0f3460',
-                            activebackground='#16213e',
-                            activeforeground='#00ff88')
-        rb2.pack(anchor=tk.W, pady=3)
+        # Info metode (tidak lagi radio button karena fixed ke COMBINED)
+        method_info = tk.Label(left_frame,
+                              text="✨ HSV + RGB + GLCM\n ",
+                              font=("Segoe UI", 9),
+                              bg='#16213e',
+                              fg='#00ff88',
+                              justify=tk.LEFT)
+        method_info.pack(anchor=tk.W, pady=(0,15))
         
         # Separator
         separator = tk.Frame(left_frame, height=2, bg='#0f3460')
@@ -610,7 +601,7 @@ class TomatoClassifierGUI:
             return
         
         try:
-            method = self.method_var.get()
+            method = 'COMBINED'  # Fixed to COMBINED (HSV + RGB + GLCM)
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, f"Training dengan metode {method}...\n")
             self.root.update()
@@ -627,7 +618,7 @@ class TomatoClassifierGUI:
             result = f"\n{'='*50}\n"
             result += f"HASIL TRAINING\n"
             result += f"{'='*50}\n"
-            result += f"Metode: {method} + GLCM + Color Moment\n"
+            result += f"Metode: HSV + RGB + GLCM \n"
             result += f"🎯 AKURASI: {accuracy*100:.2f}%\n\n"
             
             # Format Confusion Matrix yang readable
@@ -749,7 +740,7 @@ class TomatoClassifierGUI:
             
             # Info gambar
             self.result_text.insert(tk.END, f"🖼️  Gambar: {os.path.basename(self.current_image_path)}\n")
-            self.result_text.insert(tk.END, f"⚙️  Metode: {self.classifier.feature_method} + GLCM + Color Moment\n\n")
+            self.result_text.insert(tk.END, f"⚙️  Metode: HSV + RGB + GLCM \n\n")
             
             # Separator
             self.result_text.insert(tk.END, "-"*55 + "\n\n")
@@ -974,10 +965,10 @@ class TomatoClassifierGUI:
         """Auto-load dataset saat program start"""
         if os.path.exists(self.dataset_path):
             try:
-                method = self.method_var.get()
+                method = 'COMBINED'  # Fixed to COMBINED
                 self.result_text.insert(tk.END, "=== AUTO-LOADING DATASET ===\n")
                 self.result_text.insert(tk.END, f"Mencari dataset di folder: {self.dataset_path}\n")
-                self.result_text.insert(tk.END, f"Training dengan metode {method}...\n\n")
+                self.result_text.insert(tk.END, f"Training dengan HSV + RGB + GLCM...\n\n")
                 self.root.update()
                 
                 accuracy, cm, report = self.classifier.train(self.dataset_path, method)
@@ -992,7 +983,7 @@ class TomatoClassifierGUI:
                 result = "="*50 + "\n"
                 result += "TRAINING SELESAI\n"
                 result += "="*50 + "\n"
-                result += f"Metode: {method} + GLCM + Color Moment\n"
+                result += f"Metode: HSV + RGB + GLCM \n"
                 result += f"🎯 AKURASI: {accuracy*100:.2f}%\n\n"
                 
                 # Format Confusion Matrix yang readable

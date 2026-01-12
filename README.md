@@ -2,7 +2,41 @@
 
 ## 📋 Deskripsi Proyek
 
-Aplikasi berbasis **Computer Vision** dan **Machine Learning** untuk mengklasifikasikan tingkat kematangan buah tomat secara otomatis menggunakan analisis citra digital. Sistem ini menggunakan kombinasi **GLCM (Gray Level Co-occurrence Matrix)** untuk ekstraksi fitur tekstur dan **Color Moment** untuk ekstraksi fitur warna, kemudian mengklasifikasikan menggunakan algoritma **Support Vector Machine (SVM)**.
+Aplikasi berbasis **Computer Vision** dan **Machine Learning** untuk mengklasifikasikan tingkat kematangan buah tomat secara otomatis menggunakan analisis citra digital.
+
+Sistem ini menggunakan kombinasi **22 fitur** yang terdiri dari:
+
+- **GLCM (Gray Level Co-occurrence Matrix)** untuk ekstraksi fitur tekstur (4 fitur)
+- **Dual Color Moment (HSV + RGB)** untuk ekstraksi fitur warna (18 fitur)
+- **Support Vector Machine (SVM)** untuk klasifikasi
+
+### 💡 Kenapa Dual Color Space (HSV + RGB)?
+
+#### 1. **Informasi Lebih Lengkap**
+
+- **HSV unggul untuk:** Representasi warna (Hue) dan intensitas (Saturation, Value)
+- **RGB unggul untuk:** Nilai warna absolut (terutama channel Red untuk tomat matang)
+- **Gabungan:** Model dapat "melihat" dari 2 perspektif berbeda → lebih robust!
+
+#### 2. **Contoh Kasus Real**
+
+**Tomat Matang:**
+
+- 🔴 HSV melihat: Hue rendah (0-20) = merah
+- 🔴 RGB melihat: Red channel tinggi (200-255) = merah terang
+- 🎯 Model: "Hue rendah DAN Red tinggi → pasti Matang!" ✅
+
+**Tomat Mentah:**
+
+- 🟢 HSV melihat: Hue tinggi (60-80) = hijau
+- 🟢 RGB melihat: Green channel tinggi = hijau
+- 🎯 Model: "Hue tinggi DAN Green tinggi → pasti Mentah!" ✅
+
+#### 3. **Redundancy = Robustness**
+
+- ✅ Jika HSV kurang jelas karena lighting → RGB membantu!
+- ✅ Jika RGB terpengaruh shadow → HSV tetap reliable!
+- ✅ Kombinasi keduanya meningkatkan akurasi dan konsistensi
 
 ### 🎯 Tujuan
 
@@ -50,18 +84,21 @@ GLCM adalah metode analisis tekstur yang menghitung frekuensi kemunculan pasanga
 - **Homogeneity**: `Σ Σ P(i,j) / (1 + (i-j)²)`
 - **Energy**: `Σ Σ P(i,j)²`
 
-### 2. **Ekstraksi Fitur Color Moment**
+### 2. **Ekstraksi Fitur Color Moment (Dual Color Space)**
 
 Color Moment merepresentasikan distribusi warna menggunakan 3 momen statistik untuk setiap channel warna.
 
-**Mengapa HSV lebih baik dari RGB?**
+**Sistem ini menggunakan KEDUA color space (HSV + RGB) secara bersamaan!**
 
-| Aspek              | HSV                                         | RGB                         |
-| ------------------ | ------------------------------------------- | --------------------------- |
-| **Hue (H)**        | Merepresentasikan warna murni (hijau→merah) | Tercampur dengan brightness |
-| **Saturation (S)** | Intensitas/kejenuhan warna                  | Tidak ada pemisahan         |
-| **Value (V)**      | Kecerahan terpisah dari warna               | Tercampur dengan warna      |
-| **Untuk Tomat**    | ✅ Ideal untuk deteksi kematangan           | ❌ Terpengaruh pencahayaan  |
+#### **Keunggulan Dual Color Space:**
+
+| Aspek              | HSV                             | RGB                         | Gabungan                 |
+| ------------------ | ------------------------------- | --------------------------- | ------------------------ |
+| **Warna Murni**    | Hue = warna murni (hijau→merah) | Tercampur dengan brightness | Lebih robust             |
+| **Intensitas**     | Saturation = kejenuhan warna    | Tidak ada pemisahan         | Dapat info dari 2 sisi   |
+| **Kecerahan**      | Value = kecerahan terpisah      | Tercampur dengan warna      | Lebih invariant          |
+| **Lighting**       | ✅ Invariant terhadap lighting  | ❌ Terpengaruh pencahayaan  | ✅✅ Sangat robust       |
+| **Absolute Value** | ❌ Tidak ada nilai absolut      | ✅ Nilai warna absolut      | ✅✅ Best of both worlds |
 
 **3 Momen Statistik per Channel:**
 
@@ -90,7 +127,10 @@ Color Moment merepresentasikan distribusi warna menggunakan 3 momen statistik un
    - Positif = Condong kanan
    - Negatif = Condong kiri
 
-**Total Fitur**: 9 fitur (3 momen × 3 channel HSV)
+**Total Fitur Color Moment**: 18 fitur
+
+- HSV: 9 fitur (3 momen × 3 channel)
+- RGB: 9 fitur (3 momen × 3 channel)
 
 ### 3. **Klasifikasi dengan SVM (Support Vector Machine)**
 
@@ -142,26 +182,30 @@ graph TD
     C --> D[Ekstraksi Fitur]
 
     D --> E[GLCM Features]
-    D --> F[Color Moment HSV/RGB]
+    D --> F[Color Moment HSV]
+    D --> G[Color Moment RGB]
 
-    E --> G[4 Fitur Tekstur]
-    F --> H[9 Fitur Warna]
+    E --> H[4 Fitur Tekstur]
+    F --> I[9 Fitur Warna HSV]
+    G --> J[9 Fitur Warna RGB]
 
-    G --> I[Gabung: 13 Fitur]
-    H --> I
+    H --> K[Gabung: 22 Fitur]
+    I --> K
+    J --> K
 
-    I --> J[SVM Classifier]
-    J --> K{Prediksi}
+    K --> L[SVM Classifier]
+    L --> M{Prediksi}
 
-    K --> L[🟠 Mentah]
-    K --> M[🟢 Muda]
-    K --> N[🔴 Matang]
+    M --> N[🟠 Mentah]
+    M --> O[🟢 Muda]
+    M --> P[🔴 Matang]
 
     style A fill:#e3f2fd
-    style K fill:#fff3e0
-    style L fill:#fff9c4
-    style M fill:#c8e6c9
-    style N fill:#ffcdd2
+    style M fill:#fff3e0
+    style N fill:#fff9c4
+    style O fill:#c8e6c9
+    style P fill:#ffcdd2
+    style K fill:#b2dfdb
 ```
 
 ---
@@ -228,11 +272,10 @@ Program akan otomatis melatih model saat startup jika folder `dataset` tersedia.
 
 1. Klik **"📚 Load Dataset & Training"**
 2. Pilih folder dataset
-3. Pilih metode: **HSV + GLCM** atau **RGB + GLCM**
-4. Tunggu training selesai
-5. 📊 **Akurasi badge** di header akan update otomatis
-6. ✅ **Model auto-saved** dengan timestamp ke `models/tomato_model_[METHOD]_[TIMESTAMP].pkl`
-7. Lihat hasil akurasi dan confusion matrix
+3. Tunggu training selesai (HSV + RGB + GLCM otomatis digunakan)
+4. 📊 **Akurasi badge** di header akan update otomatis
+5. ✅ **Model auto-saved** dengan timestamp ke `models/tomato_model_COMBINED_[TIMESTAMP].pkl`
+6. Lihat hasil akurasi dan confusion matrix
 
 #### **Mode 3: Load Model Tersimpan**
 
@@ -327,22 +370,31 @@ CONFIDENCE: 94.23%
 
 ---
 
-## 🔬 Hasil Eksperimen
+### Perbandingan Metode Ekstraksi Fitur
 
-### Perbandingan Metode
-
-| Metode         | Akurasi | Kelebihan                                                 | Kekurangan                 |
-| -------------- | ------- | --------------------------------------------------------- | -------------------------- |
-| **HSV + GLCM** | ~85-95% | ✅ Robust terhadap pencahayaan<br>✅ Deteksi warna akurat | ⚠️ Sensitif terhadap noise |
-| **RGB + GLCM** | ~75-85% | ✅ Sederhana<br>✅ Cepat                                  | ❌ Terpengaruh pencahayaan |
+| Metode                 | Total Fitur | Akurasi (Est.) | Kelebihan                                                             | Use Case                  |
+| ---------------------- | ----------- | -------------- | --------------------------------------------------------------------- | ------------------------- |
+| **HSV + RGB + GLCM** โ | 22          | ~85-95%        | โ Best robustness<br>โ Dual color perspective<br>โ Lighting invariant | **Rekomendasi (Current)** |
+| **HSV + GLCM**         | 13          | ~80-90%        | โ Robust pencahayaan<br>โ Deteksi warna baik                          | Small dataset             |
+| **RGB + GLCM**         | 13          | ~70-80%        | โ Simple & fast<br>โ Absolute color                                   | Controlled lighting       |
 
 ### Rekomendasi
 
-🏆 **HSV + GLCM** adalah pilihan terbaik untuk klasifikasi kematangan tomat karena:
+๐ **HSV + RGB + GLCM (COMBINED)** adalah metode terbaik karena:
 
-- Memisahkan informasi warna dari kecerahan
-- Lebih robust terhadap variasi pencahayaan
-- Akurasi lebih tinggi dan konsisten
+1. **Dual Color Space Advantage:**
+
+   - Kombinasi HSV (lighting-invariant) + RGB (absolute values)
+   - 22 fitur memberikan informasi lebih lengkap
+
+2. **Higher Accuracy:**
+
+   - Lebih banyak fitur = lebih banyak informasi
+   - Model lebih robust terhadap variasi kondisi
+
+3. **Future-Proof:**
+   - Scalable untuk dataset lebih besar
+   - Compatible dengan advanced classifiers
 
 ---
 
