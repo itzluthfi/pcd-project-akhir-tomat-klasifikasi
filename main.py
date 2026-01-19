@@ -361,7 +361,8 @@ class TomatoClassifierGUI:
         
         self.classifier = TomatoClassifier()
         self.current_image_path = None
-        self.dataset_path = "dataset"  # Path default ke folder dataset
+        self.dataset_path = "dataset_augmented"  # Path ke folder dataset AUGMENTED (100+ gambar per kelas)
+        # Untuk pakai dataset lama: gunakan "dataset"
         self.accuracy_label = None  # Label untuk menampilkan akurasi
         
         self.setup_gui()
@@ -679,15 +680,94 @@ class TomatoClassifierGUI:
             messagebox.showerror("Error", f"Training gagal: {str(e)}")
     
     def show_confusion_matrix(self, cm):
-        """Tampilkan confusion matrix dalam window baru"""
-        fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                   xticklabels=['Mentah', 'Muda', 'Matang'],
-                   yticklabels=['Mentah', 'Muda', 'Matang'],
-                   ax=ax)
-        ax.set_ylabel('True Label')
-        ax.set_xlabel('Predicted Label')
-        ax.set_title('Confusion Matrix')
+        """Tampilkan confusion matrix sebagai diagram bar dengan persentase"""
+        categories = ['Mentah', 'Muda', 'Matang']
+        
+        # Hitung persentase untuk setiap kelas
+        percentages = []
+        class_names = []
+        colors_data = []
+        
+        for i, category in enumerate(categories):
+            total_actual = cm[i].sum()
+            if total_actual > 0:
+                correct = cm[i][i]
+                percentage = (correct / total_actual) * 100
+                percentages.append(percentage)
+                class_names.append(category)
+                
+                # Warna berdasarkan persentase
+                if percentage >= 90:
+                    colors_data.append('#27AE60')  # Hijau tua
+                elif percentage >= 70:
+                    colors_data.append('#2ECC71')  # Hijau
+                elif percentage >= 50:
+                    colors_data.append('#F39C12')  # Orange
+                else:
+                    colors_data.append('#E74C3C')  # Merah
+        
+        # Hitung akurasi overall
+        total_correct = np.trace(cm)
+        total_samples = np.sum(cm)
+        overall_accuracy = (total_correct / total_samples) * 100 if total_samples > 0 else 0
+        
+        # Create figure dengan 2 subplot
+        fig = plt.figure(figsize=(16, 7), facecolor='white')
+        gs = fig.add_gridspec(1, 2, width_ratios=[1.2, 1], wspace=0.3)
+        
+        # Subplot 1: Bar chart persentase per kelas
+        ax1 = fig.add_subplot(gs[0, 0])
+        bars = ax1.bar(class_names, percentages, color=colors_data, edgecolor='black', linewidth=2, alpha=0.85)
+        
+        # Tambahkan label persentase di atas bar
+        for i, (bar, pct) in enumerate(zip(bars, percentages)):
+            height = bar.get_height()
+            ax1.text(bar.get_x() + bar.get_width()/2., height + 2,
+                    f'{pct:.1f}%',
+                    ha='center', va='bottom', fontsize=16, fontweight='bold')
+            
+            # Tambahkan jumlah benar/total di dalam bar
+            total_actual = cm[i].sum()
+            correct = cm[i][i]
+            ax1.text(bar.get_x() + bar.get_width()/2., height/2,
+                    f'{correct}/{int(total_actual)}',
+                    ha='center', va='center', fontsize=14, fontweight='bold', color='white')
+        
+        ax1.set_ylabel('Akurasi (%)', fontsize=14, fontweight='bold')
+        ax1.set_xlabel('Kelas', fontsize=14, fontweight='bold')
+        ax1.set_title('📊 Akurasi Per Kelas', fontsize=16, fontweight='bold', pad=20)
+        ax1.set_ylim(0, 105)
+        ax1.grid(axis='y', alpha=0.3, linestyle='--', linewidth=1.5)
+        ax1.set_facecolor('#f9f9f9')
+        ax1.tick_params(labelsize=12)
+        
+        # Subplot 2: Pie chart akurasi overall dan detail
+        ax2 = fig.add_subplot(gs[0, 1])
+        
+        # Data untuk pie chart
+        pie_data = [overall_accuracy, 100 - overall_accuracy]
+        pie_labels = [f'Benar\n{overall_accuracy:.1f}%', f'Salah\n{100-overall_accuracy:.1f}%']
+        pie_colors = ['#27AE60', '#E74C3C']
+        
+        wedges, texts, autotexts = ax2.pie(pie_data, labels=pie_labels, colors=pie_colors, 
+                                            autopct='', startangle=90, 
+                                            textprops={'fontsize': 14, 'fontweight': 'bold'},
+                                            wedgeprops={'edgecolor': 'black', 'linewidth': 2})
+        
+        ax2.set_title('🎯 Akurasi Keseluruhan', fontsize=16, fontweight='bold', pad=20)
+        
+        # Tambahkan teks di tengah pie chart
+        centre_circle = plt.Circle((0, 0), 0.70, fc='white', edgecolor='black', linewidth=2)
+        ax2.add_artist(centre_circle)
+        ax2.text(0, 0, f'{overall_accuracy:.1f}%', ha='center', va='center', 
+                fontsize=32, fontweight='bold', color='#27AE60')
+        ax2.text(0, -0.25, 'Akurasi', ha='center', va='center', 
+                fontsize=14, fontweight='bold', color='#555')
+        
+        # Suptitle dengan info tambahan
+        fig.suptitle(f'Evaluasi Model - Total Sampel: {total_samples} | Benar: {total_correct} | Salah: {total_samples - total_correct}',
+                    fontsize=14, fontweight='bold', y=0.98)
+        
         plt.tight_layout()
         plt.show()
     
@@ -809,62 +889,88 @@ class TomatoClassifierGUI:
         # Load gambar
         img_bgr = cv2.imread(image_path)
         img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img, (200, 200))
+        img_resized = cv2.resize(img, (300, 300))  # Lebih besar untuk lebih jelas
         
         # Convert ke HSV dan Grayscale
         hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
-        hsv_resized = cv2.resize(hsv, (200, 200))
+        hsv_resized = cv2.resize(hsv, (300, 300))  # Lebih besar
         
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        gray_resized = cv2.resize(gray, (200, 200))
+        gray_resized = cv2.resize(gray, (300, 300))  # Lebih besar
         
-        # Create figure dengan 2 baris
-        fig = plt.figure(figsize=(15, 10))
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
+        # Create figure dengan 2 baris - LEBIH BESAR
+        fig = plt.figure(figsize=(18, 12), facecolor='white')
+        gs = fig.add_gridspec(3, 3, hspace=0.4, wspace=0.35)
         
-        # Baris 1: Tampilan gambar
+        # Baris 1: Tampilan gambar - LEBIH PROMINENT
         ax1 = fig.add_subplot(gs[0, 0])
         ax1.imshow(img_resized)
-        ax1.set_title('Citra RGB', fontweight='bold')
+        ax1.set_title('Citra RGB', fontweight='bold', fontsize=14, color='darkblue', pad=10)
         ax1.axis('off')
+        # Tambah border untuk lebih menonjol
+        for spine in ax1.spines.values():
+            spine.set_edgecolor('darkblue')
+            spine.set_linewidth(3)
+        ax1.spines['top'].set_visible(True)
+        ax1.spines['right'].set_visible(True)
+        ax1.spines['bottom'].set_visible(True)
+        ax1.spines['left'].set_visible(True)
         
         ax2 = fig.add_subplot(gs[0, 1])
         ax2.imshow(hsv_resized)
-        ax2.set_title('Citra HSV', fontweight='bold')
+        ax2.set_title('Citra HSV', fontweight='bold', fontsize=14, color='darkgreen', pad=10)
         ax2.axis('off')
+        # Tambah border untuk lebih menonjol
+        for spine in ax2.spines.values():
+            spine.set_edgecolor('darkgreen')
+            spine.set_linewidth(3)
+        ax2.spines['top'].set_visible(True)
+        ax2.spines['right'].set_visible(True)
+        ax2.spines['bottom'].set_visible(True)
+        ax2.spines['left'].set_visible(True)
         
         ax3 = fig.add_subplot(gs[0, 2])
         ax3.imshow(gray_resized, cmap='gray')
-        ax3.set_title('Citra Grayscale (GLCM)', fontweight='bold')
+        ax3.set_title('Citra Grayscale\n(untuk GLCM)', fontweight='bold', fontsize=14, color='darkred', pad=10)
         ax3.axis('off')
+        # Tambah border untuk lebih menonjol
+        for spine in ax3.spines.values():
+            spine.set_edgecolor('darkred')
+            spine.set_linewidth(3)
+        ax3.spines['top'].set_visible(True)
+        ax3.spines['right'].set_visible(True)
+        ax3.spines['bottom'].set_visible(True)
+        ax3.spines['left'].set_visible(True)
         
-        # Baris 2: Histogram RGB
+        # Baris 2: Histogram RGB - LEBIH TEBAL DAN JELAS
         ax4 = fig.add_subplot(gs[1, :])
-        colors = ('red', 'green', 'blue')
-        labels = ('Red', 'Green', 'Blue')
+        colors = ('#FF0000', '#00FF00', '#0000FF')  # Warna lebih vibrant
+        labels = ('Red Channel', 'Green Channel', 'Blue Channel')
         for i, (color, label) in enumerate(zip(colors, labels)):
             hist = cv2.calcHist([img], [i], None, [256], [0, 256])
-            ax4.plot(hist, color=color, label=label, linewidth=2)
+            ax4.plot(hist, color=color, label=label, linewidth=3.5, alpha=0.8)  # Lebih tebal
         ax4.set_xlim([0, 256])
-        ax4.set_xlabel('Pixel Value', fontweight='bold')
-        ax4.set_ylabel('Frequency', fontweight='bold')
-        ax4.set_title('Histogram RGB - Distribusi Warna', fontweight='bold', fontsize=12)
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
+        ax4.set_xlabel('Nilai Pixel', fontweight='bold', fontsize=13)
+        ax4.set_ylabel('Frekuensi', fontweight='bold', fontsize=13)
+        ax4.set_title('📊 Histogram RGB - Distribusi Warna', fontweight='bold', fontsize=15, pad=15)
+        ax4.legend(fontsize=12, loc='upper right', framealpha=0.9)
+        ax4.grid(True, alpha=0.3, linestyle='--', linewidth=1.5)
+        ax4.set_facecolor('#f9f9f9')
         
-        # Baris 3: Histogram HSV
+        # Baris 3: Histogram HSV - WARNA LEBIH MENCOLOK
         ax5 = fig.add_subplot(gs[2, :])
-        hsv_colors = (['orange', 'purple', 'gray'])
-        hsv_labels = (['Hue (Warna)', 'Saturation (Kejenuhan)', 'Value (Kecerahan)'])
+        hsv_colors = ('#FF6B35', '#9B59B6', '#34495E')  # Warna lebih mencolok
+        hsv_labels = ('Hue (Warna)', 'Saturation (Kejenuhan)', 'Value (Kecerahan)')
         for i, (color, label) in enumerate(zip(hsv_colors, hsv_labels)):
             hist = cv2.calcHist([hsv], [i], None, [256], [0, 256])
-            ax5.plot(hist, color=color, label=label, linewidth=2)
+            ax5.plot(hist, color=color, label=label, linewidth=3.5, alpha=0.8)  # Lebih tebal
         ax5.set_xlim([0, 256])
-        ax5.set_xlabel('Pixel Value', fontweight='bold')
-        ax5.set_ylabel('Frequency', fontweight='bold')
-        ax5.set_title('Histogram HSV - Analisis Kematangan', fontweight='bold', fontsize=12)
-        ax5.legend()
-        ax5.grid(True, alpha=0.3)
+        ax5.set_xlabel('Nilai Pixel', fontweight='bold', fontsize=13)
+        ax5.set_ylabel('Frekuensi', fontweight='bold', fontsize=13)
+        ax5.set_title('📊 Histogram HSV - Analisis Kematangan', fontweight='bold', fontsize=15, pad=15)
+        ax5.legend(fontsize=12, loc='upper right', framealpha=0.9)
+        ax5.grid(True, alpha=0.3, linestyle='--', linewidth=1.5)
+        ax5.set_facecolor('#f9f9f9')
         
         # Analisis warna untuk penjelasan
         mean_red = np.mean(img[:,:,0])
